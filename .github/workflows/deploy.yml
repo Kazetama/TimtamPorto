@@ -1,0 +1,38 @@
+name: Deploy Laravel to Azure
+
+on:
+  push:
+    branches: [ "main" ] # Jalan otomatis tiap kamu push ke main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.REMOTE_HOST }}
+          username: ${{ secrets.REMOTE_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            # 1. Masuk ke folder project di Azure
+            # Jika folder belum ada, kita clone dulu
+            if [ ! -d "~/docker-apps" ]; then
+              git clone https://github.com/Kazetama/docker-apps.git ~/docker-apps
+            fi
+            cd ~/docker-apps
+
+            # 2. Tarik kode terbaru
+            git pull origin main
+
+            # 3. Jalankan Docker (Build ulang kalau ada perubahan)
+            docker compose up -d --build
+
+            # 4. Jalankan perintah Laravel di dalam container
+            # Catatan: Nama container biasanya 'folder-app-1'
+            docker exec docker-apps-laravel.test-1 php artisan migrate --force
+            docker exec docker-apps-laravel.test-1 npm install
+            docker exec docker-apps-laravel.test-1 npm run build
+
+            # 5. Bersihkan sampah image agar storage Azure lega
+            docker image prune -f
